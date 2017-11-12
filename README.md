@@ -9,7 +9,7 @@ counts in a group, kafka cluster brokers information, consumer lags, topic and p
 
 For consumer lags and offsets  monitoring, it works with the new high level consumers
 only right now. 
-The old high level consumer where offsets are stored in Zookeeper and consumers coordinations happen
+The old high level consumer where offsets are stored in Zookeeper and where consumer-coordinations happen
 through Zookeeper is not tested.
 
 Installation
@@ -20,6 +20,7 @@ any platoform. I will be adding a dockerfile to build a Docker image shortly.
 Run the below command:
 
 **$ go get github.com/nipuntalukdar/kafka_consumer_exporter**
+
 **$ go install github.com/nipuntalukdar/kafka_consumer_exporter**
 
 
