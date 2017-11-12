@@ -28,7 +28,7 @@ Running the exporter
 --------------------
 
 An example:
-**$ kafka_consumer_exporter -group agroup:topica,topicb -group anothergroup:topicx,topicy,topicz -topics mytopic,yourtopic **
+**$ kafka_consumer_exporter -group agroup:topica,topicb -group anothergroup:topicx,topicy,topicz -topics mytopic,yourtopic**
 
 Detailed usage shown below:
 ```bash
