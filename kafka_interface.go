@@ -317,7 +317,7 @@ func (cl *kafka_client) _getTopicOffsets() {
 		for _, partition := range partitions {
 			offr := offrs[partition.leader_id]
 			if offr == nil {
-				offr = &sarama.OffsetRequest{Version: int16(1)}
+				offr = &sarama.OffsetRequest{Version: int16(0)}
 				offrs[partition.leader_id] = offr
 			}
 			offr.AddBlock(topic, partition.part, -1, 1)
@@ -333,16 +333,18 @@ func (cl *kafka_client) _getTopicOffsets() {
 	for brid, offr := range offrs {
 		br, ok := id_to_br[brid]
 		if !ok {
-			log.Printf("Broker for id % not found to fetch metadata", brid)
+			log.Printf("Broker for id %d not found to fetch metadata", brid)
 			continue
 		}
 		err = br.Open(cl.conf)
 		if err != nil && err != sarama.ErrAlreadyConnected {
+			log.Printf("Error in connecting to broker:%s %v", br.Addr(), err)
 			continue
 		}
 		offr_resp, err = br.GetAvailableOffsets(offr)
 		br.Close()
 		if err != nil {
+			log.Printf("Error in getting offset %v", err)
 			continue
 		}
 		off_resp_all = append(off_resp_all, offr_resp)
