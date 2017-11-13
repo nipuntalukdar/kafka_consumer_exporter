@@ -25,12 +25,18 @@ type availableOffset struct {
 type kbroker struct {
 	id   int32
 	addr string
+	br   *sarama.Broker
+}
+
+type part_details struct {
+	part      int32
+	leader_id int32
 }
 
 type metaData struct {
 	topics_in_error        []string
 	topic_part_notok       map[string][]int32
-	topic_part_ok          map[string][]int32
+	topic_part_ok          map[string][]*part_details
 	topic_part_offsets     map[string]map[int32]*availableOffset
 	last_part_offset_fetch time.Time
 	group_offsets          map[string]map[string]map[int32]int64
@@ -89,8 +95,8 @@ func newKafkaClient(broker_list, topic_list []string, group_map map[string][]str
 		log.Printf("Retrying kafka client initialiazation")
 	}
 	check_error_exit("Kafka client initialiazation problem", err)
-	mdata := &metaData{topic_part_notok: make(map[string][]int32), topic_part_ok: make(map[string][]int32),
-		topics_in_error: make([]string, 0)}
+	mdata := &metaData{topic_part_notok: make(map[string][]int32),
+		topic_part_ok: make(map[string][]*part_details), topics_in_error: make([]string, 0)}
 	// Monitor the topics in group list as well
 	for _, topics := range group_map {
 		topic_list = append(topic_list, topics...)
@@ -175,7 +181,7 @@ func (cl *kafka_client) _getGroupOffsets() {
 			okay_partitions, ok := cl.mdata.topic_part_ok[topic]
 			if ok {
 				for _, okay_partition := range okay_partitions {
-					offr.AddPartition(topic, okay_partition)
+					offr.AddPartition(topic, okay_partition.part)
 				}
 				addelem++
 			}
@@ -232,7 +238,7 @@ func (cl *kafka_client) getTopicPartStats() (good, bad map[string]int, err error
 		err = errors.New("Metadata fecth problem")
 		return
 	}
-	good = copyMapCount(cl.mdata.topic_part_ok)
+	good = copyMapCountPartOk(cl.mdata.topic_part_ok)
 	bad = copyMapCount(cl.mdata.topic_part_notok)
 	return
 }
@@ -297,24 +303,39 @@ func (cl *kafka_client) getTopicOffsets() (ret map[string]map[int32]int64) {
 }
 
 func (cl *kafka_client) _getTopicOffsets() {
-	offr := &sarama.OffsetRequest{Version: int16(1)}
-	for topic, partitions := range cl.mdata.topic_part_ok {
-		for _, partition := range partitions {
-			offr.AddBlock(topic, partition, -1, 1)
-		}
-	}
 	brs := cl.client.Brokers()
 	if len(brs) == 0 {
 		log.Printf("No available brokers to fetch metdata")
 		return
+	}
+	id_to_br := make(map[int32]*sarama.Broker)
+	for _, br := range brs {
+		id_to_br[br.ID()] = br
+	}
+	offrs := make(map[int32]*sarama.OffsetRequest)
+	for topic, partitions := range cl.mdata.topic_part_ok {
+		for _, partition := range partitions {
+			offr := offrs[partition.leader_id]
+			if offr == nil {
+				offr = &sarama.OffsetRequest{Version: int16(1)}
+				offrs[partition.leader_id] = offr
+			}
+			offr.AddBlock(topic, partition.part, -1, 1)
+		}
 	}
 	var (
 		err       error
 		offr_resp *sarama.OffsetResponse
 		offset    int64
 	)
-	for i := 0; i < 3; i++ {
-		br := brs[rand.Intn(len(brs))]
+
+	off_resp_all := make([]*sarama.OffsetResponse, 0)
+	for brid, offr := range offrs {
+		br, ok := id_to_br[brid]
+		if !ok {
+			log.Printf("Broker for id % not found to fetch metadata", brid)
+			continue
+		}
 		err = br.Open(cl.conf)
 		if err != nil && err != sarama.ErrAlreadyConnected {
 			continue
@@ -324,22 +345,28 @@ func (cl *kafka_client) _getTopicOffsets() {
 		if err != nil {
 			continue
 		}
+		off_resp_all = append(off_resp_all, offr_resp)
 	}
-	if err != nil {
-		log.Printf("Error in fetching response: %v", err)
+	if len(off_resp_all) == 0 {
+		log.Printf("No topic offset fetch happened")
 		return
 	}
-	version := offr_resp.Version
 	cl.mdata.topic_part_offsets = make(map[string]map[int32]*availableOffset)
-	for topic, block := range offr_resp.Blocks {
-		cl.mdata.topic_part_offsets[topic] = make(map[int32]*availableOffset)
-		for partition, ofr_block := range block {
-			if version == 0 {
-				offset = ofr_block.Offsets[0]
-			} else {
-				offset = ofr_block.Offset
+	for _, offr_resp = range off_resp_all {
+		version := offr_resp.Version
+		for topic, block := range offr_resp.Blocks {
+			_, ok := cl.mdata.topic_part_offsets[topic]
+			if !ok {
+				cl.mdata.topic_part_offsets[topic] = make(map[int32]*availableOffset)
 			}
-			cl.mdata.topic_part_offsets[topic][partition] = &availableOffset{err: ofr_block.Err != sarama.ErrNoError, offset: offset}
+			for partition, ofr_block := range block {
+				if version == 0 {
+					offset = ofr_block.Offsets[0]
+				} else {
+					offset = ofr_block.Offset
+				}
+				cl.mdata.topic_part_offsets[topic][partition] = &availableOffset{err: ofr_block.Err != sarama.ErrNoError, offset: offset}
+			}
 		}
 	}
 	cl.mdata.last_part_offset_fetch = time.Now()
@@ -354,7 +381,7 @@ func (cl *kafka_client) getMetadata() *metaData {
 func _getBrokersFromMetadata(mrd *sarama.MetadataResponse) (brokers []*kbroker) {
 	brokers = make([]*kbroker, 0)
 	for _, br := range mrd.Brokers {
-		brokers = append(brokers, &kbroker{id: br.ID(), addr: br.Addr()})
+		brokers = append(brokers, &kbroker{id: br.ID(), addr: br.Addr(), br: br})
 	}
 	return
 }
@@ -403,8 +430,8 @@ func (cl *kafka_client) _getMetadata() *metaData {
 		log.Printf("Metadata fetch error :%v", err)
 		return nil
 	}
-	cl.mdata = &metaData{topic_part_notok: make(map[string][]int32), topic_part_ok: make(map[string][]int32),
-		topics_in_error: make([]string, 0)}
+	cl.mdata = &metaData{topic_part_notok: make(map[string][]int32),
+		topic_part_ok: make(map[string][]*part_details), topics_in_error: make([]string, 0)}
 	cl.mdata.last_fetch = time.Now()
 	cl.mdata.brokers = _getBrokersFromMetadata(mrd)
 	for _, tmd := range mrd.Topics {
@@ -424,10 +451,10 @@ func (cl *kafka_client) _getMetadata() *metaData {
 			} else {
 				_, ok := cl.mdata.topic_part_ok[tmd.Name]
 				if !ok {
-					cl.mdata.topic_part_ok[tmd.Name] = []int32{int32(1)}
+					cl.mdata.topic_part_ok[tmd.Name] = []*part_details{&part_details{pmedata.ID, pmedata.Leader}}
 				} else {
 					cl.mdata.topic_part_ok[tmd.Name] = append(cl.mdata.topic_part_ok[tmd.Name],
-						pmedata.ID)
+						&part_details{pmedata.ID, pmedata.Leader})
 				}
 			}
 		}

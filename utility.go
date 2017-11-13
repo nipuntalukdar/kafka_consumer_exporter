@@ -24,6 +24,17 @@ func copyMapCount(src map[string][]int32) map[string]int {
 	return ret
 }
 
+func copyMapCountPartOk(src map[string][]*part_details) map[string]int {
+	if src == nil {
+		return nil
+	}
+	ret := make(map[string]int)
+	for k, v := range src {
+		ret[k] = len(v)
+	}
+	return ret
+}
+
 func filter(input []string, f func(string) bool) []string {
 	ret := make([]string, 0)
 	for _, element := range input {
