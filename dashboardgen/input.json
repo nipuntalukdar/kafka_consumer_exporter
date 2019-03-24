@@ -1,0 +1,18 @@
+{
+  "consumergroups": {
+    "group1": [
+      "topic1",
+      "topic2",
+      "topic3"
+    ],
+    "group2": [
+      "topic4",
+      "topic5"
+    ]
+  },
+  "topics": [
+    "topics1",
+    "topics2",
+    "topics3"
+  ]
+}
