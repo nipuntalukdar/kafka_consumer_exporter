@@ -48,7 +48,58 @@ Usage of ./kafka_consumer_exporter:
     	Comma separated list of kafka topics
   -with-go-metrics
     	Should we import go runtime and http handler metrics
+
 ```
+
+How to Create Grafana Dashboard
+-------------------------------
+**Clone this repository.**
+Go to directory **dashboardgen** under the repository directory.
+Update the input.json with the topics and consumer groups you want to monitor. For example, if you want to monitor group "SomeGroup" which consumes from topis TopicA, TopicB, TopicC and also want to monitor another consumer group "SecretGroup" which consumes from topics SecretA, SecretB and also if you want to monitor extra topics ExtraTopicA, ExtraTopicB,  then you should update the **input.json** as shown below:
+
+```bash
+        {
+          "consumergroups": {
+            "SomeGroup": [
+              "TopicA",
+              "TopicB",
+              "TopicC"
+            ],
+            "SecretGroup": [
+              "SecretA",
+              "SecretB"
+            ]
+          },
+          "topics": [
+            "TopicA",
+            "TopicB",
+            "TopicC",
+            "SecretA",
+            "SecretB",
+            "ExtraTopicA",
+            "ExtraTopicB"
+          ]
+        }
+
+```
+
+
+The dashboard needs an environment (so that we may cater for multiple Kafka cluster). A Prometheus target may look like as the one shown below:
+
+```bash
+         - job_name: 'KafkaTopicAndConsumer'
+            honor_labels: true
+            static_configs:
+            - targets: ['localhost:10001']
+              labels:
+                env: 'myenv'
+```
+
+Now, you issue the below command (from dashboardgen directory). We are assuming environment label griven to Prometheus exporter is myenv.
+**$ python kafkadashboard.py myenv   > kafkadashboard.json **
+
+kafkadashboard.json may be imported to Grafana now !!!
+
 
 Grafana Dashboard
 -----------------
