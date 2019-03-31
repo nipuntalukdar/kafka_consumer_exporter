@@ -49,3 +49,11 @@ Usage of ./kafka_consumer_exporter:
   -with-go-metrics
     	Should we import go runtime and http handler metrics
 ```
+
+Grafana Dashboard
+-----------------
+**A sample dashboard screenshot is given below:**
+
+<img width="800" alt="screenshot1" src="https://user-images.githubusercontent.com/1930383/55284052-bf359f00-538c-11e9-91a7-61475b4205cd.PNG">\
+<img width="800" alt="screenshot2" src="https://user-images.githubusercontent.com/1930383/55284053-c8bf0700-538c-11e9-8890-ca276dd4f2eb.PNG">\
+<img width="800" alt="screenshot3" src="https://user-images.githubusercontent.com/1930383/55284058-d1afd880-538c-11e9-975a-87145b3a19bb.PNG">
