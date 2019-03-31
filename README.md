@@ -96,7 +96,8 @@ The dashboard needs an environment (so that we may cater for multiple Kafka clus
 ```
 
 Now, you issue the below command (from dashboardgen directory). We are assuming environment label griven to Prometheus exporter is myenv.
-**$ python kafkadashboard.py myenv   > kafkadashboard.json **
+
+**$ python kafkadashboard.py myenv   > kafkadashboard.json**
 
 kafkadashboard.json may be imported to Grafana now !!!
 
